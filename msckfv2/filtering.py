@@ -255,13 +255,18 @@ class Split_KalmanNet_Filter():
         # linearization_error = H_jacob@x_predict
         linearization_error = y_predict - H_jacob@x_predict
 
+        # Helper function to reshape column vectors to batch format
+        def to_batch_format(tensor):
+            """Convert (dim, 1) column vector to (1, dim) batch format."""
+            return tensor.T if tensor.dim() == 2 else tensor.unsqueeze(0)
+        
         # Reshape inputs for DNN: (Batch=1, dim)
         # Column vectors (dim, 1) need to be transposed to (1, dim)
-        state_inno_in = state_inno.T if state_inno.dim() == 2 else state_inno.unsqueeze(0)
-        residual_in = residual.T if residual.dim() == 2 else residual.unsqueeze(0)
-        diff_state_in = diff_state.T if diff_state.dim() == 2 else diff_state.unsqueeze(0)
-        diff_obs_in = diff_obs.T if diff_obs.dim() == 2 else diff_obs.unsqueeze(0)
-        linearization_error_in = linearization_error.T if linearization_error.dim() == 2 else linearization_error.unsqueeze(0)
+        state_inno_in = to_batch_format(state_inno)
+        residual_in = to_batch_format(residual)
+        diff_state_in = to_batch_format(diff_state)
+        diff_obs_in = to_batch_format(diff_obs)
+        linearization_error_in = to_batch_format(linearization_error)
         H_jacob_in = H_jacob.reshape((1, -1))  # (1, x_dim*y_dim)
         
         (Pk, Sk) = self.kf_net(state_inno_in, residual_in, diff_state_in, diff_obs_in, linearization_error_in, H_jacob_in)

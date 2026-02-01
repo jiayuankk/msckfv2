@@ -712,9 +712,11 @@ class MSCKF:
         
         # Extrinsic rotation correction
         dtheta_ext = delta_x[IMUStateIndex.EXT_ROT:IMUStateIndex.EXT_ROT+3]
-        R_ext_correction = rodrigues(dtheta_ext / np.linalg.norm(dtheta_ext) 
-                                     if np.linalg.norm(dtheta_ext) > 1e-10 else np.array([0, 0, 1]),
-                                     np.linalg.norm(dtheta_ext))
+        dtheta_ext_norm = np.linalg.norm(dtheta_ext)
+        if dtheta_ext_norm > 1e-10:
+            R_ext_correction = rodrigues(dtheta_ext / dtheta_ext_norm, dtheta_ext_norm)
+        else:
+            R_ext_correction = rodrigues(np.array([0, 0, 1]), dtheta_ext_norm)
         self.imu_state.R_imu_cam0 = R_ext_correction @ self.imu_state.R_imu_cam0
         
         # Extrinsic translation correction

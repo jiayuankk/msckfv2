@@ -184,8 +184,13 @@ class SKNetAdapter:
         # Feature 5: Linearization error
         # For MSCKF, this approximates h(x) - H @ x
         # In practice, we compute it as the nonlinearity in the measurement model
-        y_pred = H @ state_pred[:H.shape[1]] if H.shape[1] <= len(state_pred) else np.zeros(len(r))
-        lin_error = residual + y_pred - H @ state_pred[:H.shape[1]] if H.shape[1] <= len(state_pred) else np.zeros(obs_dim)
+        has_sufficient_dims = H.shape[1] <= len(state_pred)
+        if has_sufficient_dims:
+            y_pred = H @ state_pred[:H.shape[1]]
+            lin_error = residual + y_pred - H @ state_pred[:H.shape[1]]
+        else:
+            y_pred = np.zeros(len(r))
+            lin_error = np.zeros(obs_dim)
         
         # Feature 6: Flattened Jacobian
         # Pad/reshape H to match expected dimensions

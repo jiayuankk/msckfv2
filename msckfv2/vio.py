@@ -119,6 +119,7 @@ class VIO:
             return results
         
         # Process image through image processor
+        # Note: The original ImageProcessor uses 'stareo_callback' (with typo)
         feature_msg = self.image_processor.stareo_callback(stereo_msg)
         
         if feature_msg is None or len(feature_msg.features) == 0:
