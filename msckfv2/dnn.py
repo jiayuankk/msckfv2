@@ -14,6 +14,102 @@ except:
     gru_scale_s = 2
     gru_scale_k = 2
 
+
+class DNN_KalmanNet_GSS(torch.nn.Module):
+    """
+    KalmanNet that directly outputs the Kalman gain K.
+    
+    This is a simpler architecture compared to DNN_SKalmanNet_GSS which
+    outputs Pk and Sk separately.
+    """
+    def __init__(self, x_dim: int = 2, y_dim: int = 2):
+        super().__init__()
+        self.x_dim = x_dim
+        self.y_dim = y_dim
+
+        # Network dimensions
+        H1 = 256  # Feature extraction layer
+        H2 = 128  # Decode layer
+        HIDDEN_DIM = 256  # GRU hidden dimension
+
+        # Input dimension: state_inno(x) + residual(y) + diff_state(x) + diff_obs(y)
+        self.input_dim = (self.x_dim) * 2 + (self.y_dim) * 2
+        
+        # Output dimension: Kalman gain K (x_dim x y_dim)
+        self.output_dim = self.x_dim * self.y_dim
+
+        # Feature extraction
+        self.l1 = nn.Sequential(
+            nn.Linear(self.input_dim, H1),
+            nn.ReLU()
+        )
+
+        # GRU parameters
+        self.gru_input_dim = H1
+        self.gru_hidden_dim = HIDDEN_DIM
+        self.gru_n_layer = nGRU
+        self.batch_size = 1
+
+        self.GRU = nn.GRU(self.gru_input_dim, self.gru_hidden_dim, self.gru_n_layer)
+        self.hn = torch.randn(self.gru_n_layer, self.batch_size, self.gru_hidden_dim)
+
+        # Output layers
+        self.l2 = nn.Sequential(
+            nn.Linear(self.gru_hidden_dim, H2),
+            nn.ReLU(),
+            nn.Linear(H2, self.output_dim)
+        )
+
+    def initialize_hidden(self):
+        """Reset hidden state."""
+        device = next(self.parameters()).device
+        self.hn = torch.randn(self.gru_n_layer, 1, self.gru_hidden_dim).to(device)
+
+    def forward(self, state_inno, observation_inno, diff_state, diff_obs):
+        """
+        Forward pass to compute Kalman gain.
+        
+        Args:
+            state_inno: (Batch, x_dim) State innovation
+            observation_inno: (Batch, y_dim) Residual
+            diff_state: (Batch, x_dim) State difference
+            diff_obs: (Batch, y_dim) Observation difference
+            
+        Returns:
+            K: (x_dim, y_dim) Kalman gain matrix
+        """
+        # Handle batch size changes
+        if state_inno.dim() == 1:
+            state_inno = state_inno.unsqueeze(0)
+            observation_inno = observation_inno.unsqueeze(0)
+            diff_state = diff_state.unsqueeze(0)
+            diff_obs = diff_obs.unsqueeze(0)
+
+        curr_batch_size = state_inno.shape[0]
+        curr_device = state_inno.device
+        
+        if (self.hn.shape[1] != curr_batch_size) or (self.hn.device != curr_device):
+            self.hn = torch.randn(self.gru_n_layer, curr_batch_size, self.gru_hidden_dim).to(curr_device)
+        else:
+            self.hn = self.hn.detach()
+
+        # Concatenate inputs
+        input_tensor = torch.cat((state_inno, observation_inno, diff_state, diff_obs), 1)
+        
+        # Feature extraction
+        l1_out = self.l1(input_tensor)
+        
+        # GRU
+        gru_in = l1_out.unsqueeze(0)
+        gru_out, self.hn = self.GRU(gru_in, self.hn)
+        x = gru_out.squeeze(0)
+        
+        # Output
+        K_flat = self.l2(x)
+        K = K_flat.reshape((self.x_dim, self.y_dim))
+        
+        return K
+
 class DNN_SKalmanNet_GSS(torch.nn.Module):
     def __init__(self, x_dim:int=2, y_dim:int=2):
         super().__init__()
